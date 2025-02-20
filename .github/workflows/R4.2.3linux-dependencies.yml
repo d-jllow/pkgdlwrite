@@ -1,0 +1,73 @@
+
+name: R 4.2.3 Linux Setup
+
+on:
+  workflow_dispatch:  # Allows manual triggering from GitHub UI
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest  # Use Linux runner
+
+    steps:
+    # Step 1: Checkout the repository
+    - name: Checkout repository
+      uses: actions/checkout@v2
+
+    # Step 2: Set up R 4.2.3
+    - name: Set up R 4.2.3
+      uses: r-lib/actions/setup-r@v2
+      with:
+        r-version: '4.2.3'
+
+    # Step 3: Install system dependencies for R packages and Apache Arrow
+    - name: Install system dependencies and Apache Arrow
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libcurl4-openssl-dev libssl-dev libxml2-dev wget curl
+
+        # Download the Apache Arrow APT repository source package dynamically
+        wget https://apache.jfrog.io/artifactory/arrow/$(lsb_release --id --short | tr 'A-Z' 'a-z')/apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb
+
+        # Install the Apache Arrow APT repository source package
+        sudo apt install -y ./apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb
+
+        # Update the APT repository list
+        sudo apt-get update
+
+        # Install the Apache Arrow C++ development libraries
+        sudo apt-get install -y libarrow-dev
+  
+    # Step 4: Create directories for package library and downloads
+    - name: Create directories
+      run: |
+        mkdir -p r-library
+        mkdir -p r-packages-tar
+
+    # Step 5: Cache R packages to speed up future runs
+    - name: Cache R packages
+      uses: actions/cache@v3
+      with:
+        path: r-library
+        key: r-packages-${{ runner.os }}-${{ hashFiles('requirements_rlinux.txt') }}
+        restore-keys: |
+          r-packages-${{ runner.os }}-
+
+    # Step 6: Install pak and download required R packages as tar.gz files with dependencies
+    - name: Download R packages as tar.gz with dependencies
+      run: |
+        Rscript -e 'install.packages("pak", repos="https://cloud.r-project.org")'
+        Rscript -e 'pak::pkg_download(readLines("requirements_rlinux.txt"), dest="r-packages-tar", dependencies=TRUE)'
+
+    # Step 7: Debugging step: List downloaded package tarballs
+    - name: List downloaded R package tar.gz files
+      run: ls -alh r-packages-tar/
+
+    # Step 8: Upload downloaded R package tarballs as an artifact
+    - name: Upload R package tar.gz files
+      uses: actions/upload-artifact@v4
+      with:
+        name: r-packages-linux-tarballs
+        path: r-packages-tar/
