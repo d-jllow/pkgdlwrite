@@ -1,0 +1,50 @@
+
+name: R Windows Setup
+
+on:
+  workflow_dispatch:  # Allows manual triggering from GitHub UI
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest  # Uses a Windows runner for the workflow
+
+    steps:
+    # Step 1: Checkout the repository
+    - name: Checkout repository
+      uses: actions/checkout@v2
+
+    # Step 2: Set up R 4.2.0
+    - name: Set up R 4.2.0
+      uses: r-lib/actions/setup-r@v2
+      with:
+        r-version: '4.2.0'  # Specify the R version
+
+    # Step 3: Create directories for package library and downloads
+    - name: Create directories
+      run: |
+        mkdir r-library
+        mkdir r-packages-tar
+      shell: bash
+
+    # Step 4: Install and download required R packages as tar.gz files
+    - name: Download R packages as tar.gz with dependencies
+      run: |
+        Rscript -e "install.packages('pak', repos='https://cloud.r-project.org')"
+        Rscript -e "pak::pkg_download(readLines('requirements_r.txt'), dest='r-packages-tar', dependencies=TRUE)"
+      shell: bash
+
+    # Step 5: Debugging step: List downloaded package tarballs
+    - name: List downloaded R package tar.gz files
+      run: |
+        dir r-packages-tar
+      shell: powershell
+
+    # Step 6: Upload downloaded R package tarballs as an artifact
+    - name: Upload R package tar.gz files
+      uses: actions/upload-artifact@v4
+      with:
+        name: r-packages-tarballs
+        path: r-packages-tar/
